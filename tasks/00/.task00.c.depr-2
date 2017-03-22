@@ -1,0 +1,180 @@
+/* non-stlfreq: the plain-C (almost) implementation of the word-frequency
+ * gathering app. Follows the same specification as initial task except for
+ * restricted usage of STL templates: only std::sort() was allowed.
+ *
+ * I've found it extremely boring to invent the wheel, and have trying to
+ * entertain mysalf a little by implementing this task on plain C which is
+ * always a bit of challenging thing, IYKWIM.
+ */
+
+# include <stdlib.h>
+# include <string.h>
+# include <assert.h>
+# include <stdio.h>
+
+# ifndef INITIAL_LOOKUP_TOKEN_BUFFER_SIZE
+#   define INITIAL_LOOKUP_TOKEN_BUFFER_SIZE 1024
+# endif  /* INITIAL_LOOKUP_TOKEN_BUFFER_SIZE */
+
+/* Usually use this clumsy _static_ prefix to distinct such symbols after
+ * mangling. */
+static const size_t _static_initialBufferSize = INITIAL_LOOKUP_TOKEN_BUFFER_SIZE;
+
+/** A custom version of standard `isalpha()' since messeur Aksyonoff insisted
+ * using it is better.
+ * */
+char
+isalpha_( const char c ) {
+    return (c >= 'a' && c <= 'z')
+        || (c >= 'A' && c <= 'Z')
+        ? c : 0 ;
+}
+
+/** A plain-C representation of token met at the incoming data. */
+struct Token {
+    size_t nOccurs;
+    char * str;
+};
+
+/** Internally uses malloc() invokation to construct a list entry corresponding
+ * to specific token. Complementary with dtr function `token_free()'. */
+struct Token *
+token_new( const char * tBgn, const char * tEnd ) {
+    struct Token * tokPtr = (struct Token *) malloc( sizeof(struct Token) );
+    /* Note: bzero() and strndup() is a POSIX extensions and aren't available
+     * under MSVC. */
+    /* TODO: tolower */
+    bzero( tokPtr, sizeof(struct Token) );
+    tokPtr->str = strndup( tBgn, tEnd - tBgn );
+}
+
+/** Dtr function cleaning a single token entry. */
+void
+token_delete( struct Token * tokPtr ) {
+    assert( tokPtr );
+    assert( tokPtr->str );
+    free( tokPtr->str );
+    free( tokPtr );
+}
+
+/** Token look-up cache.
+ *
+ * Well, most suitable here would be the red-black tree, but they forbid us
+ * to use them. Look-up in a simple binary tree at the worst case is still
+ * better than plain comparison. One may at any time implement rebalancing
+ * procedure once being concerning about performance anyway...
+ * */
+struct TokenBinTree {
+    struct Token * token;
+    struct TokenLookUpCache * left, * right;
+};
+
+struct TokenBinTree *
+tbtree_new( struct Token * tokPtr ) {
+    struct TokenBinTree * r =
+                (struct TokenBinTree *) malloc(sizeof(struct TokenBinTree));
+    bzero( r, sizeof(struct TokenBinTree) );
+    r->token = tokPtr;
+    return r;
+}
+
+/*
+ *
+ */
+
+struct ToksState {
+    struct TokenBinTree * root,
+                        * topBranch;
+    char * buffer, * cb;
+    const char * tokBgn;
+    size_t bufLength;
+};
+
+void
+tok_state_enlarge_buffer( struct ToksState * s ) {
+    size_t nl = s->bufLength + _static_initialBufferSize;
+    char * nv = (char *) malloc( nl );
+    if( !nv ) {
+        fprintf(stderr, "Memory allocation error: unable to allocate %zu "
+            "bytes for token buffer.\n", nl );
+    }
+    memcpy( nv, s->buffer, s->bufLength );
+    free( s->buffer );
+    s->buffer = nv;
+    s->bufLength = nl;
+}
+
+struct ToksState *
+tok_state_new() {
+    struct ToksState * s = malloc( sizeof(struct TokenBinTree) );
+    s->buffer = malloc( _static_initialBufferSize );
+    s->bufLength = _static_initialBufferSize;
+    return s;
+}
+
+void
+tok_state_reset( struct ToksState * s ) {
+    bzero( s->buffer, s->bufLength );
+    s->topBranch = s->root;
+    s->cb = s->buffer;
+}
+
+struct TokenBinTree *
+tok_state_purge( struct ToksState * s ) {
+    free( s->buffer );
+    struct TokenBinTree * r = s->root;
+    free( s );
+    return r;
+}
+
+/* The two pfunctions below are used in tight combination with
+ * `tokenize_text()' to perform navigation and insertion of acquired tokens
+ * with state object.
+ */
+
+static void
+_tbtree_consider_char(
+                struct ToksState * s,
+                const char * c ) {
+    assert( s && c );
+    if( !s->topBranch ) {
+        /* initialize new traversal */
+        s->topBranch = s->root;
+        s->tokBgn = c;
+        *(s->cb = s->buffer) = *c;
+    }
+
+    if( s->topBranch ) {
+        if( *(s->cb) > *c ) {
+
+        }
+    }
+}
+
+static void
+_tbtree_consider_token(
+                struct ToksState * state,
+                const char * tEnd ) {
+    /* TODO */
+    /* *state = tbtree_new( token_new( tBgn, tEnd ) ); */
+}
+
+struct TokenBinTree *
+tokenize_text( const char * text ) {
+    struct ToksState * state = tok_state_new();
+    state->tokBgn = NULL;
+    for( const char * c = text; '\0' != *c; ++c ) {
+        if( isalpha_(*c) ) {
+            if( !state->tokBgn ) {
+                state->tokBgn = c;
+            }
+            _tbtree_consider_char( state, c );
+        } else {
+            if( state->tokBgn ) {
+                _tbtree_consider_token( state, c );
+            }
+        }
+    }
+    return tok_state_purge(state);
+}
+

@@ -57,35 +57,87 @@ token_delete( struct Token * tokPtr ) {
  * */
 struct TokenBinTree {
     struct Token * token;
-    struct TokenLookUpCache * left, * right;
+    struct TokenBinTree * left,   /* lexicographically less */
+                        * right;  /* lexicographically more */
 };
 
 struct TokenBinTree *
-tbtree_new( struct Token * tokPtr ) {
+tbtree_new( ) {
     struct TokenBinTree * r =
                 (struct TokenBinTree *) malloc(sizeof(struct TokenBinTree));
     bzero( r, sizeof(struct TokenBinTree) );
-    r->token = tokPtr;
     return r;
 }
+
+struct TokenizerState {
+    struct TokenBinTree * root;
+    const char * cBegin,
+               * c;
+    /* A pointer to current look-up branch. May refer to:
+     *  - NULL (when no character considered).
+     *  - current
+     */
+    struct TokenBinTree * topBranch;
+    
+    char buffer[1024],
+         * lc;
+};  // struct TokenizerState
 
 /* The two pfunctions below are used in tight combination with
  * `tokenize_text()' to perform navigation and insertion of acquired tokens
  * with state object.
  */
 
+struct TokenBinTree *
+_tbt_state_branch_navigate_left( struct TokenBinTree * branch ) {
+    if( branch->left ) {
+        branch->left = tbtree_new( NULL );
+    }
+    return branch->left;
+}
+
+struct TokenBinTree *
+_tbt_state_branch_navigate_right( struct TokenBinTree * branch ) {
+    if( branch->left ) {
+        branch->left = tbtree_new( NULL );
+    }
+    return branch->left;
+}
+
 static void
-_tbtree_consider_letter(
-                struct TokenBinTree * root,
-                struct TokenBinTree ** state,
-                const char * tBgn,
+_tbt_state_copy_char( struct TokenizerState * S,
+                      char c ) {
+    *(S->lc) = c;
+    ++(S->lc);
+}
+
+static void
+_tbt_state_consider_char(
+                struct TokenizerState * S,
                 const char * c ) {
-    if( !root ) return;  /* Deny navigation at empty tree */
+    if( S->topBranch ) {
+        if( !S->topBranch->token ) {
+            /* Most frequent state --- new token has to be inserted into tree.
+             * Just copy current symbol into token cache and that's it. */
+            _tbt_state_copy_char( S, *c );
+            return;
+        }
+        char lxgDiff = S->topBranch->token->str[S->lc - S->buffer] - *c;
+        if( lxgDiff < 0 ) {
+            S->topBranch = _tbt_state_branch_navigate_left(
+                S->topBranch );
+        } else if(lxgDiff > 0) {
+            S->topBranch = _tbt_state_branch_navigate_right(
+                S->topBranch );
+        }
+        _tbt_state_copy_char( S, *c );
+        return;
+    }
     
 }
 
 static void
-_tbtree_consider_token(
+_tbt_state_consider_token(
                 struct TokenBinTree ** state,
                 const char * tBgn,
                 const char * tEnd ) {
@@ -93,6 +145,7 @@ _tbtree_consider_token(
     /* *state = tbtree_new( token_new( tBgn, tEnd ) ); */
 }
 
+# if 0
 struct TokenBinTree *
 tokenize_text( const char * text ) {
     /* TODO: state has to become an another structure */
@@ -104,7 +157,7 @@ tokenize_text( const char * text ) {
             if( !tokBgn ) {
                 tokBgn = c;
             }
-            _tbtree_consider_letter( root, &state, tokBgn, c );
+            _tbtree_consider_char( root, &state, tokBgn, c );
         } else {
             if( tokBgn ) {
                 _tbtree_consider_token( &state, tokBgn, c );
@@ -118,4 +171,5 @@ tokenize_text( const char * text ) {
     }
     return root;
 }
+# endif
 

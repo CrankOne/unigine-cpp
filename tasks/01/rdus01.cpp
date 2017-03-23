@@ -185,7 +185,16 @@ struct DefaultAllocator12 {
 //
 // Testing suite:
 
-# if 0  // requires GNU extensions
+# ifndef __GNUG__
+
+int
+main(int argc, const char * argv[]) {
+    fprintf( stderr,
+        "Dummy entry point, sorry. App built without GNU extensions support\n" );
+    return 0;
+}
+
+# else  // requires GNU extensions
 
 template<template<typename T> class ContainerT, typename T> int
 test_suite( const size_t N ) {

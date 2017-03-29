@@ -37,7 +37,8 @@ token_free( struct TokensList * l ) {
 
 void
 token_list_dump( FILE * fd, struct TokensList * l ) {
-    for( struct TokensList * cl = l; cl; cl = cl->next ) {
+    struct TokensList * cl;
+    for( cl = l; cl; cl = cl->next ) {
         # if 1
         fprintf( fd, "%zu %s\n", cl->nOccurs, cl->str );
         # else
@@ -113,8 +114,8 @@ qs( struct TokensList * hd,
  * command, excludes only duplicates following in a row. */
 void
 count_freqs( struct TokensList * l ) {
-    struct TokensList * interim;
-    for( struct TokensList * cl = l; cl->next; cl = cl->next ) {
+    struct TokensList * interim, * cl;
+    for( cl = l; cl->next; cl = cl->next ) {
         while( !strcmp( cl->str, cl->next->str ) ) {
             ++cl->nOccurs;
             interim = cl->next;
@@ -144,7 +145,8 @@ tokenize_text( char * text ) {
     struct TokensList * head = NULL,
                       * last = NULL;
     const char * tokBgn = NULL;
-    for( char * c = text; '\0' != *c; ++c ) {
+    char * c;
+    for( c = text; '\0' != *c; ++c ) {
         if( isalpha_(*c) ) {
             if( !tokBgn ) {
                 tokBgn = c;

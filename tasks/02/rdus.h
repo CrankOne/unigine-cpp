@@ -165,7 +165,6 @@ protected:
             place = (place+1)%table_size();
         }
         _table[place].set( k, v, hv );
-        printf( "> inserted %s->%d at %d w hash=%d\n", k.c_str(), v, place, hv );  // XXX
         ++_nOccupiedEntries;
         return iterator( _table + place );
     }
@@ -199,30 +198,22 @@ protected:
         _latestSearchDepth = 0;
         _fillmentThreshold = 0.7*_tableSize;
         _table[_tableSize].hashValue = 0x3;  // end marker
-        printf( "> grown to %d, end=%p, %p\n",
-                    _tableSize, _table + _tableSize,
-                    iterator(_table + _tableSize).entry );  // XXX
     }
 public:
     Value & at( const KEY & k ) {
-        printf( "> mutable at():\n" );  // XXX
         const_iterator it = find(k);
         if( end() == it ) {
-            printf( "< mutable at() #1.\n" );  // XXX
             return _insert_element( k, Value() )->second;
         }
         // The const validity was guaranteed by methods before, so the
         // const_cast<>() here seemd legit.
-        printf( "< mutable at() #2.\n" );  // XXX
         return iterator( const_cast<HashEntry *>( it.entry ) )->second;
     }
     const Value & at( const KEY & k ) const {
-        printf( "> immutable at():\n" );  // XXX
         const_iterator it = find(k);
         if( end() == it ) {
             throw std::out_of_range( "Element not found." );
         }
-        printf( "< immutable at().\n" );  // XXX
         return it;
     }
 
@@ -233,10 +224,6 @@ public:
         while( _latestSearchDepth < table_size() && hv == ((_table[place].hashValue) >> 2) ) {
             if( myhash_equals<Key>( _table[place].first, k ) ) {
                 if( !_table[place].is_released() ) {
-                    printf( "> have found %s at %d w val %d\n",
-                            k.c_str(),
-                            place,
-                            (_table + place)->second );  // XXX
                     return const_iterator( _table + place );
                 }
             }
@@ -253,10 +240,6 @@ public:
             throw std::out_of_range( "Invalid iterator provided." );
         }
         --_nOccupiedEntries;
-        printf( "> erased %s w val %d (%p)\n",
-                    it.entry->first.c_str(),
-                    it.entry->second,
-                    it.entry );  // XXX
         const_cast<HashEntry *>(it.entry)->release();
     }
 
@@ -334,4 +317,5 @@ myhash_equals<std::string>( const std::string & l, const std::string & r ) {
 //^^ This part has to be put into an implementation file //////////////////////
 
 # endif  // H_RDUS_MYHASH_H
+
 

@@ -5,51 +5,20 @@
 using namespace std;
 
 ///////////////////////////////////////////////////////////////////////////
-
-#if 1
+#if 0
 
 #include <unordered_map>
 #define myhash unordered_map
 
 #else
 
-// WARNING
-// the example class declaration below will be replaced by #include "xxxx.h"
+//# include "rdus.hpp"
+# include "rdus.h"
 
-template<typename KEY, typename VALUE>
-class myhash
-{
-public:
-	// you are allowed to tweak the iterator definition (and extend it as needed)
-	struct iterator
-	{
-		const KEY & first;
-		VALUE & second;
-		// ...
-	};
-
-public:
-	myhash();
-	~myhash();
-
-	VALUE & operator[](const KEY & k);
-	const VALUE & operator[](const KEY & k) const;
-
-	iterator * begin();
-	iterator * end();
-	const iterator * begin() const;
-	const iterator * end() const;
-
-	void erase(const KEY & k) {};
-	iterator * find(const KEY & k);
-
-	int size() const;
-};
-#endif
-
+# endif
 ///////////////////////////////////////////////////////////////////////////
 
-void main()
+int main()
 {
 	/////////////
 	// hash test

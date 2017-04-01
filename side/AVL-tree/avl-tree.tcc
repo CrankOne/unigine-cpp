@@ -94,7 +94,7 @@ protected:
     static Node * _rotate_right_big( Node * );
     // Basic internal API
     static ConstIterator _find_recursively( const Node *, const KeyRef );
-    static ConstIterator _find_closest_in_subtree( const Node *, const KeyRef );
+    static ConstIterator _lower_bound( const Node *, const KeyRef );
 };  // class AVLTree
 
 
@@ -159,7 +159,18 @@ AVLTree<KeyT, ValueT, NodeHeaderT>::_find_recursively( const Node * n, const Key
     return end();
 }
 
-
+template<typename KeyT, typename ValueT, typename NodeHeaderT>
+typename AVLTree<KeyT, ValueT, NodeHeaderT>::ConstIterator
+AVLTree<KeyT, ValueT, NodeHeaderT>::_lower_bound( const Node * n, const KeyRef k) {
+    if( key_less( n->key, k ) ) {
+        // v < current, so try to compare it with left, if possible:
+        if( n->left ) {
+            return _lower_bound( n->left, k );
+        }
+        // if impossible, return parent, since current < parent
+        return 
+    }
+}
 
 // General public API
 

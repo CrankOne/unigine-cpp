@@ -4,6 +4,7 @@
 # include <cstdlib>
 # include <stdexcept>
 # include <climits>
+# include <cassert>
 
 # if __cplusplus <= 199711L
 # define nullptr_C11 NULL
@@ -60,6 +61,7 @@ public:
     T & at( int index ) {
         const Self * cSelf = this;
         return const_cast<T&>( cSelf->at(index) ); }
+	int size() const { return _end - _data; }
 };  // myvector
 
 template<typename T, typename AllocatorT> void

@@ -17,3 +17,9 @@ tags
 a.out
 a.out.*
 out-*.txt
+/.vs
+/Debug
+/unigine-cpp.sln
+/unigine-cpp.vcxproj
+/unigine-cpp.vcxproj.filters
+/unigine-cpp.vcxproj.user

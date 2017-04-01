@@ -4,6 +4,7 @@
 # include <cstdlib>
 # include <stdexcept>
 # include <climits>
+# include <cassert>
 
 # if __cplusplus <= 199711L
 # define nullptr_C11 NULL
@@ -56,10 +57,10 @@ public:
     // ^^^ end of required interface
 public:
     // sugar/helpers/aux...
-    const T & at( int index ) const;
     T & at( int index ) {
         const Self * cSelf = this;
         return const_cast<T&>( cSelf->at(index) ); }
+	const T & at(int index) const;
 };  // myvector
 
 template<typename T, typename AllocatorT> void
@@ -91,7 +92,8 @@ myvector<T, AllocatorT>::push_back(const T & value) {
 template<typename T, typename AllocatorT> const T &
 myvector<T, AllocatorT>::at( int index ) const {
     assert( _data );
-    if(!(size() > index)) {
+	Self * mSelf = const_cast<Self *>(this);
+    if(!(mSelf->size() > index)) {
         throw std::out_of_range( "Custom vector index overflow." );
     }
     return *(_data + index);

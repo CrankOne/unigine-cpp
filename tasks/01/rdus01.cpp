@@ -101,7 +101,7 @@ main(int argc, const char * argv[]) {
 #endif
 		t.push_back(5); // 1, 3, 4, 5
 		t.erase(t.begin() + 1); // 1, 4, 5
-		r += t[3];  // shall fail here.
+		//r += t[3];  // shall fail here.
 		const myvector<int> & rt = t;
 		r += rt[2];
 		r += (t.begin() != t.end());

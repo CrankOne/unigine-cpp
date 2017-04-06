@@ -40,7 +40,7 @@ public:
         HashEntry() : hashValue(0), key(first), value(second) {}
 
         /// true, if is not occupied and wasn't occupied.
-        bool is_vacant() const { return !is_occupied(); }
+        bool is_vacant() const { return !((hashValue & 0x1) || (hashValue & 0x2)); }
         bool is_occupied() const { return hashValue & 0x1; }
         void release() { hashValue |= 0x2; hashValue &= ~0x1; }
         bool is_released() { return hashValue & 0x2; }
@@ -182,7 +182,7 @@ template<typename KEY, typename VALUE>
 myhash<KEY, VALUE>::myhash() :
                 _table( nullptr_C11 ),
                 _latestSearchDepth( 0 ),
-                _tableSize( 8 ),
+                _tableSize( 1 ),
                 _fillmentThreshold( 0 ),
                 _nOccupiedEntries( 0 ) { _grow(); }
 
@@ -226,6 +226,12 @@ myhash<KEY, VALUE>::_insert_element( const Key & k, const Value & v) {
         assert( _latestSearchDepth < table_size() );
         ++_latestSearchDepth;
         place = (place+1)%table_size();
+        # ifndef NDEBUG
+        if( _latestSearchDepth > table_size() ) {
+            throw std::runtime_error( "Hash table seems busy, bot growth "
+                "condition failed." );  // must never happen
+        }
+        # endif
     }
     _table[place].set( k, v, hv );
     printout( "> inserted %s->%d at %d w hash=%d\n", k.c_str(), v, place, hv );  // XXX
@@ -244,6 +250,7 @@ template<typename KEY, typename VALUE> void
 myhash<KEY, VALUE>::_grow() {
     HashEntry * oldTable = _table,
               * oldTableEnd = _table + _tableSize;
+    _nOccupiedEntries = 0;
     _tableSize <<= 2;
     _table = new HashEntry [_tableSize + 1];
     if( oldTable ) {
@@ -268,12 +275,12 @@ myhash<KEY, VALUE>::at( const KEY & k ) {
     printout( "> mutable at():\n" );  // XXX
     const_iterator it = find(k);
     if( end() == it ) {
-        printout( "< mutable at() #1.\n" );  // XXX
+        printout( "< mutable at() added new element.\n" );  // XXX
         return _insert_element( k, Value() )->second;
     }
     // The const validity was guaranteed by methods before, so the
     // const_cast<>() here seemd legit.
-    printout( "< mutable at() #2.\n" );  // XXX
+    printout( "< mutable at() returning existing element.\n" );  // XXX
     return iterator( const_cast<HashEntry *>( it.entry ) )->second;
 }
 
@@ -293,7 +300,11 @@ myhash<KEY, VALUE>::find( const KEY & k ) const {
     HashValue hv = myhash_hash_spec<Key>(k);
     Size place = hv%table_size();
     _latestSearchDepth = 0;
-    while( _latestSearchDepth < table_size() && hv == ((_table[place].hashValue) >> 2) ) {
+    printout( "> initial lookup state: hv=%d, place=%d, lsd=%d\n",
+            hv, place, _latestSearchDepth);
+    while( _latestSearchDepth < table_size()
+        && !_table[place].is_vacant()
+        /*&& hv%table_size() == ((_table[place].hashValue) >> 2)%table_size()*/ ) {
         if( myhash_equals<Key>( _table[place].first, k ) ) {
             if( !_table[place].is_released() ) {
                 printout( "> have found %s at %d w val %d\n",
@@ -302,10 +313,19 @@ myhash<KEY, VALUE>::find( const KEY & k ) const {
                         (_table + place)->second );  // XXX
                 return const_iterator( _table + place );
             }
+            printout( "> omitting colliding %s at %d w val %d since it was erased\n",
+                    k.c_str(),
+                    place,
+                    (_table + place)->second );  // XXX
         }
+        printout( "* %s != %s\n", _table[place].first.c_str(), k.c_str() );
+        place=(place+1)%table_size();
         ++_latestSearchDepth;
-        place = (place+1)%table_size();
     }
+    printout( "< final lookup state: hv=%d, place=%d, lsd=%d "
+              " (latest hv=%d) (entry %s NOT FOUND)\n",
+            hv, place, _latestSearchDepth, ((_table[place].hashValue) >> 2),
+            k.c_str() );
     return end();
 }
 

@@ -4,6 +4,7 @@
 # include <cassert>
 # include <stdexcept>
 # include <cstdint>
+# include <cstdio>
 
 # if __cplusplus <= 199711L
 # define nullptr_C11 NULL
@@ -31,13 +32,15 @@ public:
     typedef HashValue (*HashFunction)( const uint8_t *, Size );
     typedef myhash<Key, Value> Self;
     struct HashEntry {
-        Key first, & key;  // ref for spec compat
-        Value second, & value;  // ref for spec compat
+		Key key;  // ref for spec compat
+		const Key & first;
+		Value value;
+		Value & second;  // ref for spec compat
         /// Two last bits are reserved for tombstone flag and occupancy flag
         /// correspondingly.
         HashValue hashValue;
 
-        HashEntry() : hashValue(0), key(first), value(second) {}
+        HashEntry() : hashValue(0), first(key), second(value) {}
 
         /// true, if is not occupied and wasn't occupied.
         bool is_vacant() const { return !((hashValue & 0x1) || (hashValue & 0x2)); }
@@ -45,8 +48,8 @@ public:
         void release() { hashValue |= 0x2; hashValue &= ~0x1; }
         bool is_released() { return hashValue & 0x2; }
         void set( const Key & k, const Value & v, HashValue hv ) {
-            first = k;
-            second = v;
+            key = k;
+            value = v;
             hashValue = (hv << 2) | 0x1;
         }
         bool is_valid() const {
@@ -263,7 +266,7 @@ myhash<KEY, VALUE>::_grow() {
         delete [] oldTable;
     }
     _latestSearchDepth = 0;
-    _fillmentThreshold = 0.7*_tableSize;
+    _fillmentThreshold = (Size) 0.7*_tableSize;
     _table[_tableSize].hashValue = 0x3;  // end marker
     printout( "> grown to %d, end=%p, %p\n",
                 _tableSize, _table + _tableSize,

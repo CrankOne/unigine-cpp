@@ -1,0 +1,141 @@
+#include <stdio.h>
+#include <assert.h>
+
+#include <string>
+using namespace std;
+
+///////////////////////////////////////////////////////////////////////////
+
+#if 0
+
+#define _TESTING_STD
+#include <unordered_map>
+#define myhash unordered_map
+
+#else
+
+// WARNING
+// the example class declaration below will be replaced by #include "xxxx.h"
+
+template<typename KEY, typename VALUE>
+class myhash
+{
+public:
+	// you are allowed (encouraged really) to tweak the iterator definition (and/or extend it as needed)
+	struct iterator
+	{
+		const KEY first;
+		VALUE second;
+		// ...
+
+		bool operator != (const iterator & rhs) const;
+		bool operator == (const iterator & rhs) const;
+		const iterator & operator++() const;
+		const iterator & operator++(int) const;
+		std::pair<KEY,VALUE> & operator*() const;
+		std::pair<KEY,VALUE> * operator->() const;
+	};
+
+public:
+	myhash();
+	~myhash();
+
+	VALUE & operator[](const KEY & k);
+
+	iterator begin();
+	iterator end();
+
+	// if you can't manage this with a single iterator type here, you are allowed to add const_iterator
+	const iterator begin() const;
+	const iterator end() const;
+
+	void erase(const KEY & k);
+	iterator find(const KEY & k);
+	const iterator find(const KEY & k) const;
+
+	int size() const;
+
+	// suddenly, our custom extensions!
+	// we will benchmark them against standard approach, and check if we can get better performance
+	const VALUE & get(const KEY & k, const VALUE & default_value) const;
+
+	// you are allowed (encouraged really) to tweak the iterator definition (and/or extend it as needed)
+	// see usage example below in the text code; basically you will need to make ->key and ->value work
+	struct myiterator
+	{
+		// ...
+		struct mypair
+		{
+			KEY key;
+			VALUE value;
+		};
+		mypair * operator->() const;
+		// ...
+	};
+
+	myiterator find_first();
+	myiterator find_next(myiterator & it);
+	bool is_valid(myiterator & it);
+};
+#endif
+
+///////////////////////////////////////////////////////////////////////////
+
+void main()
+{
+	/////////////
+	// hash test
+	/////////////
+
+	{
+		myhash<std::string,int> h;
+		h["abc"] = 123;
+		h["def"] = 456;
+		assert(h.find("abc") != h.end());
+		assert(h.find("def") != h.end());
+		assert(h["abc"] == 123);
+		assert(h["def"] == 456);
+		h["abc"]++;
+		assert(h["abc"] == 124);
+		h.erase("abc");
+		assert(h.find("abc") == h.end());
+		h["abc"] = 789;
+		assert(h["abc"] == 789);
+
+		const myhash<std::string,int> & ch = h;
+		assert(ch.find("abc") != ch.end());
+//		assert(ch["abc"] == 789); // should NOT compile
+		assert(ch.size() == 2);
+
+		int r1 = 0, r2 = 0;
+		for (auto it : h)
+		{
+			r1 += it.first.length();
+			r2 += it.second;
+		}
+		assert(r1 == 6);
+		assert(r2 == 789 + 456);
+
+		for (auto it = h.begin(); it != h.end(); it++)
+		{
+			r2 -= it->second;
+//			it->first = "fck"; // must NOT compile
+			it->second = 0;
+		}
+		assert(r2 == 0);
+
+		r2 = 0;
+		for (auto & it : ch)
+			r2 += it.second;
+		assert(r2 == 0);
+
+#ifdef _TESTING_STD
+#else
+		r2 = 0;
+		for (auto it = h.find_first(); h.is_valid(it); it = h.find_next(it))
+			r2 += it->key.length() + it->value;
+#endif
+
+	}
+	printf("passed\n");
+}

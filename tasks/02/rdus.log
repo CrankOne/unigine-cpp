@@ -1,0 +1,5 @@
+test02.cpp
+z:\work\school\task02\rdus.h(163) : error C3861: 'assert': identifier not found
+        z:\work\school\task02\rdus.h(154) : while compiling class template member function 'myhash<std::string,int>::iterator myhash<std::string,int>::_insert_element(const std::basic_string<char,std::char_traits<char>,std::allocator<char>> &,const int &)'
+        z:\work\school\task02\rdus.h(206) : see reference to function template instantiation 'myhash<std::string,int>::iterator myhash<std::string,int>::_insert_element(const std::basic_string<char,std::char_traits<char>,std::allocator<char>> &,const int &)' being compiled
+        z:\work\school\task02\rdus.h(309) : see reference to class template instantiation 'myhash<std::string,int>' being compiled

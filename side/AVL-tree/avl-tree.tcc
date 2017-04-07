@@ -18,19 +18,42 @@ class AVLTreeException : public std::exception {
 };
 
 template<typename FirstT, typename SecondT>
-class Pair {
+struct Pair {
     FirstT first;
     SecondT second;
+    Pair( const FirstT & f, const SecondT & s ) : first(f), second(s) {}
 };  // class Pair
 
+template<typename KeyT>
+struct UsualKeyTraits {
+    typedef KeyT Type;
+
+    typedef Type & Reference;
+    typedef const Type & ConstReference;
+
+    typedef Type * Pointer;
+    typedef const Type * ConstPointer;
+};
+
 template<typename KeyT,
-         template<class> class TraitsT > bool
-key_less( const typename TraitsT<KeyT>::Reference l,
-          const typename TraitsT<KeyT>::Reference r );
+         template<class> class TraitsT=UsualKeyTraits >
+struct KeyCompare {
+    static bool less( typename TraitsT<KeyT>::ConstReference l,
+                      typename TraitsT<KeyT>::ConstReference r ) {
+        return l < r;
+    }
+    static bool equal( typename TraitsT<KeyT>::ConstReference l,
+                       typename TraitsT<KeyT>::ConstReference r ) {
+        return l == r;
+    }
+};
+
+template<typename T> using StdKeyCompare = KeyCompare<T>;
 
 template<typename KeyT,
          typename ValueT,
-         typename NodeHeaderT=uint8_t>
+         template<class> class KeyCompareT=StdKeyCompare,
+         typename NodeHeaderT=int8_t>
 class AVLTree {
 public:
     typedef KeyT Key;
@@ -38,23 +61,32 @@ public:
 
     typedef Key * KeyPtr;
     typedef Key & KeyRef;
+    typedef const KeyRef ConstKeyRef;
     typedef Value * ValuePtr;
     typedef Value & ValueRef;
+    typedef KeyCompareT<Key> KeyCompare;
 
     typedef NodeHeaderT NodeHeader;
 
-    struct Node;
+    typedef AVLTree<Key, Value, KeyCompareT, NodeHeader> Self;
 
-    struct Node {
-        Key key;
-        Value value;
+    struct Node : public Pair<Key, Value> {
+        typedef Pair<Key, Value> Parent;
+
         NodeHeader hdr;
         
         Node * left,
              * right,
              * parent
              ;
-        Node() : left(nullptr_C11),
+        Node() : hdr(0),
+                 left(nullptr_C11),
+                 right(nullptr_C11),
+                 parent(nullptr_C11) {}
+        Node( ConstKeyRef k, const Value & v ) :
+                 Parent(k, v),
+                 hdr(0),
+                 left(nullptr_C11),
                  right(nullptr_C11),
                  parent(nullptr_C11) {}
         ~Node() {
@@ -65,6 +97,11 @@ public:
         NodeHeader balance() const { return hdr; }
         void balance(NodeHeader nb) { hdr = nb; }
         bool is_leaf() const;
+        bool is_left_heavy() const { return 0 > balance(); }
+        bool is_right_heavy() const { return 0 < balance(); }
+        bool is_balanced() const { return !balance(); }
+        void inc_balance() { hdr--; }
+        void dec_balance() { hdr++; }
     };
 
     template<typename NodeT>
@@ -73,17 +110,48 @@ public:
         NodeT * _c;
     protected:
         TIterator( NodeT * c ) : _c(c) {}
+        friend Self;
+    public:
+        TIterator<NodeT> & operator++() {
+            if( _c->right ) {
+                _c = _c->right;
+            } else if( _c->parent ) {
+                _c = _c->parent;
+            }
+            return *this;
+        };
+
+        bool operator!=( TIterator<NodeT> & it ) const {
+            return it._c != this->_c;
+        }
+
+        bool operator==( TIterator<NodeT> & it ) const {
+            return ! ( *this != it );
+        }
+
+        const Pair<Key, Value> * operator->(){
+            return _c;
+        }
     };
 
     typedef TIterator<Node> Iterator;
     typedef TIterator<const Node> ConstIterator;
 public:
-    Pair<bool, ConstIterator> insert( const KeyRef, const ValueRef );
-    ConstIterator find( const KeyRef ) const;
+    AVLTree() : _root(nullptr) {}
+
+    Pair<bool, ConstIterator> insert( ConstKeyRef, const ValueRef );
+    ConstIterator find( ConstKeyRef ) const;
     void erase( ConstIterator );
 
-    ConstIterator begin() const;  // TODO
-    ConstIterator end() const;  // TODO
+    ConstIterator begin() const {
+        if( !_root ) return end();
+        const Node * n;
+        for( n = _root; n->left; n = n->left ){}
+        return ConstIterator(n);
+    }
+    ConstIterator end() const {
+        return ConstIterator( (Node *) 0x1 );  // TODO: better ideas?
+    }
 private:
     Node * _root;
 protected:
@@ -93,16 +161,18 @@ protected:
     static Node * _rotate_right( Node * );
     static Node * _rotate_right_big( Node * );
     // Basic internal API
-    static ConstIterator _find_recursively( const Node *, const KeyRef );
-    static ConstIterator _lower_bound( const Node *, const KeyRef );
+    static ConstIterator _find_recursively( const Node *, ConstKeyRef );
+    static ConstIterator _lower_bound( const Node *, ConstKeyRef, bool wentRight );
+    static Pair<bool, ConstIterator> _insert( Node *, ConstKeyRef, const ValueRef );
+    static void _rebalance( Node * );
 };  // class AVLTree
 
 
 // Standard AVL tree rotation routines
 
-template<typename KeyT, typename ValueT, typename NodeHeaderT>
-typename AVLTree<KeyT, ValueT, NodeHeaderT>::Node *
-AVLTree<KeyT, ValueT, NodeHeaderT>::_rotate_left( Node * a ) {
+template<typename KeyT, typename ValueT, template<class> class KeyCompareT, typename NodeHeaderT>
+typename AVLTree<KeyT, ValueT, KeyCompareT, NodeHeaderT>::Node *
+AVLTree<KeyT, ValueT, KeyCompareT, NodeHeaderT>::_rotate_left( Node * a ) {
     Node * b = a->right;
     a->right = b->left;
     if( a->right ) { a->right->parent = a; }
@@ -113,16 +183,16 @@ AVLTree<KeyT, ValueT, NodeHeaderT>::_rotate_left( Node * a ) {
     return b;
 }
 
-template<typename KeyT, typename ValueT, typename NodeHeaderT>
-typename AVLTree<KeyT, ValueT, NodeHeaderT>::Node *
-AVLTree<KeyT, ValueT, NodeHeaderT>::_rotate_left_big( Node * n ) {
+template<typename KeyT, typename ValueT, template<class> class KeyCompareT, typename NodeHeaderT>
+typename AVLTree<KeyT, ValueT, KeyCompareT, NodeHeaderT>::Node *
+AVLTree<KeyT, ValueT, KeyCompareT, NodeHeaderT>::_rotate_left_big( Node * n ) {
     n->right = _rotate_right( n->right );
     return _rotate_left( n );
 }
 
-template<typename KeyT, typename ValueT, typename NodeHeaderT>
-typename AVLTree<KeyT, ValueT, NodeHeaderT>::Node *
-AVLTree<KeyT, ValueT, NodeHeaderT>::_rotate_right( Node * a ) {
+template<typename KeyT, typename ValueT, template<class> class KeyCompareT, typename NodeHeaderT>
+typename AVLTree<KeyT, ValueT, KeyCompareT, NodeHeaderT>::Node *
+AVLTree<KeyT, ValueT, KeyCompareT, NodeHeaderT>::_rotate_right( Node * a ) {
     Node * b = a->left;
     a->left = b->right;
     if( a->left ) { a->left->parent = a; }
@@ -133,24 +203,24 @@ AVLTree<KeyT, ValueT, NodeHeaderT>::_rotate_right( Node * a ) {
     return b;
 }
 
-template<typename KeyT, typename ValueT, typename NodeHeaderT>
-typename AVLTree<KeyT, ValueT, NodeHeaderT>::Node *
-AVLTree<KeyT, ValueT, NodeHeaderT>::_rotate_right_big( Node * n ) {
+template<typename KeyT, typename ValueT, template<class> class KeyCompareT, typename NodeHeaderT>
+typename AVLTree<KeyT, ValueT, KeyCompareT, NodeHeaderT>::Node *
+AVLTree<KeyT, ValueT, KeyCompareT, NodeHeaderT>::_rotate_right_big( Node * n ) {
     n->left = _rotate_left( n->left );
     return _rotate_right( n );
 }
 
 // Internal API
 
-template<typename KeyT, typename ValueT, typename NodeHeaderT>
-typename AVLTree<KeyT, ValueT, NodeHeaderT>::ConstIterator
-AVLTree<KeyT, ValueT, NodeHeaderT>::_find_recursively( const Node * n, const KeyRef k ) {
-    if( key_less(n->key, k) ) {
+template<typename KeyT, typename ValueT, template<class> class KeyCompareT, typename NodeHeaderT>
+typename AVLTree<KeyT, ValueT, KeyCompareT, NodeHeaderT>::ConstIterator
+AVLTree<KeyT, ValueT, KeyCompareT, NodeHeaderT>::_find_recursively( const Node * n, ConstKeyRef k ) {
+    if( key_less(n->first, k) ) {
         if( n->left ) {
             return _find_recursively( n->left, k );
         }
         return end();
-    } else if( key_equal( n->key, k ) ) {
+    } else if( KeyCompare::equal( n->first, k ) ) {
         return ConstIterator( n );
     } else if( n->right ) {
         return _find_recursively( n->right, k );
@@ -159,32 +229,105 @@ AVLTree<KeyT, ValueT, NodeHeaderT>::_find_recursively( const Node * n, const Key
     return end();
 }
 
-template<typename KeyT, typename ValueT, typename NodeHeaderT>
-typename AVLTree<KeyT, ValueT, NodeHeaderT>::ConstIterator
-AVLTree<KeyT, ValueT, NodeHeaderT>::_lower_bound( const Node * n, const KeyRef k) {
-    if( key_less( n->key, k ) ) {
-        // v < current, so try to compare it with left, if possible:
+template<typename KeyT, typename ValueT, template<class> class KeyCompareT, typename NodeHeaderT>
+typename AVLTree<KeyT, ValueT, KeyCompareT, NodeHeaderT>::ConstIterator
+AVLTree<KeyT, ValueT, KeyCompareT, NodeHeaderT>::_lower_bound( const Node * n, ConstKeyRef k, bool wentRight ) {
+    // TODO: check!
+    if( key_less( k, n->first ) ) {
         if( n->left ) {
-            return _lower_bound( n->left, k );
+            return _lower_bound( n->left, k, wentRight ); // go left
         }
-        // if impossible, return parent, since current < parent
-        return 
+        if( wentRight ) {
+            return ConstIterator( n );
+        }
+        return end();  // all keys lies before given
+    } else if( KeyCompare::equal( k, n->first ) ) {
+        return ConstIterator( n );
+    } else {
+        if( n->right ) {
+            return _lower_bound( n->right, k, true );  // go right
+        }
+        return ConstIterator( n );
     }
 }
 
 // General public API
 
-template<typename KeyT, typename ValueT, typename NodeHeaderT>
-typename AVLTree<KeyT, ValueT, NodeHeaderT>::ConstIterator
-AVLTree<KeyT, ValueT, NodeHeaderT>::find( const KeyRef k ) const {
+template<typename KeyT, typename ValueT, template<class> class KeyCompareT, typename NodeHeaderT>
+typename AVLTree<KeyT, ValueT, KeyCompareT, NodeHeaderT>::ConstIterator
+AVLTree<KeyT, ValueT, KeyCompareT, NodeHeaderT>::find( ConstKeyRef k ) const {
     if( !_root ) { return end(); }
     return _find_recursively( _root, k );
 }
 
-template<typename KeyT, typename ValueT, typename NodeHeaderT>
-Pair<bool, typename AVLTree<KeyT, ValueT, NodeHeaderT>::ConstIterator>
-AVLTree<KeyT, ValueT, NodeHeaderT>::insert( const KeyRef k, const ValueRef ) {
+template<typename KeyT, typename ValueT, template<class> class KeyCompareT, typename NodeHeaderT>
+Pair<bool, typename AVLTree<KeyT, ValueT, KeyCompareT, NodeHeaderT>::ConstIterator>
+AVLTree<KeyT, ValueT, KeyCompareT, NodeHeaderT>::insert( ConstKeyRef k, const ValueRef v ) {
+    if( !_root ) {
+        _root = new Node( k, v );
+        return Pair<bool, ConstIterator>( true, ConstIterator(_root) );
+    }
+    return _insert( _root, k, v );
+}
 
+template<typename KeyT, typename ValueT, template<class> class KeyCompareT, typename NodeHeaderT>
+Pair<bool, typename AVLTree<KeyT, ValueT, KeyCompareT, NodeHeaderT>::ConstIterator>
+AVLTree<KeyT, ValueT, KeyCompareT, NodeHeaderT>::_insert( Node * n, ConstKeyRef k, const ValueRef v ) {
+    if( KeyCompare::equal(k, n->first) ) {
+        // insertion failure --- element exists:
+        return Pair<bool, ConstIterator>( false, ConstIterator(n) );
+    }
+    if( KeyCompare::less( k, n->first ) ) {
+        if( n->left ) {
+            return _insert( n->left, k, v );
+        } else {
+            n->dec_balance();
+            n->left = new Node( k, v );  // TODO: alloc
+            n->left->parent = n;
+            _rebalance(n);
+            return Pair<bool, ConstIterator>( true, ConstIterator(n->left) );
+        }
+    } else {
+        if( n->right ) {
+            return _insert( n->right, k, v );
+        } else {
+            n->inc_balance();
+            n->right = new Node( k, v );  // TODO: alloc
+            n->right->parent = n;
+            _rebalance(n);
+            return Pair<bool, ConstIterator>( true, ConstIterator(n->right) );
+        }
+    }
+}
+
+template<typename KeyT, typename ValueT, template<class> class KeyCompareT, typename NodeHeaderT> void
+AVLTree<KeyT, ValueT, KeyCompareT, NodeHeaderT>::_rebalance( Node * n ) {
+    // Given node has a valid balance --- has to re-trace its ancestors.
+    while( n->parent ) {
+        n = n->parent;
+
+        NodeHeader bDiff = (n->right ? abs(n->right->balance()) : 0 )
+                         - (n->left  ? abs(n->left->balance())  : 0 )
+                         ;
+
+        if( -2 == bDiff ) {
+            // height(n->left->left) < height(n->left->right) => _rotate_right_big(n)
+            // else rotate_right(n)
+            if( n->left->balance() > 0 ) {
+                _rotate_right_big( n );
+            } else {
+                _rotate_right( n );
+            }
+        } else if( 2 == bDiff ) {
+            // height(n->right->right) < height(n->right->left) < _rotate_left_big(n)
+            // else rotate_left(n)
+            if( n->right->balance() > 0 ) {
+                _rotate_left_big( n );
+            } else {
+                _rotate_left( n );
+            }
+        }
+    }
 }
 
 }  // advanced_containers

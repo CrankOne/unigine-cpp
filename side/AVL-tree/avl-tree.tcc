@@ -100,8 +100,8 @@ public:
         bool is_left_heavy() const { return 0 > balance(); }
         bool is_right_heavy() const { return 0 < balance(); }
         bool is_balanced() const { return !balance(); }
-        void inc_balance() { hdr--; }
-        void dec_balance() { hdr++; }
+        void inc_balance() { ++hdr; }
+        void dec_balance() { --hdr; }
     };
 
     template<typename NodeT>
@@ -114,10 +114,9 @@ public:
     public:
         TIterator<NodeT> & operator++() {
             if( _c->right ) {
-                _c = _c->right;
-            } else if( _c->parent ) {
-                _c = _c->parent;
+                for(_c = _c->right; _c->left; _c = _c->left){}
             }
+            for( _c = _c->parent; _c && _c->right; _c = _c->right ) {}
             return *this;
         };
 
@@ -151,6 +150,24 @@ public:
     }
     ConstIterator end() const {
         return ConstIterator( (Node *) 0x1 );  // TODO: better ideas?
+    }
+
+    // XXX
+    static void XXX_dump( const Node * n, size_t ns ) {
+        if( !n ) {
+            std::cout << std::string( ns, '\t' );
+            std::cout << "-" << std::endl;
+            return;
+        }
+        XXX_dump( n->left,  ns+1 );
+        std::cout << std::string( ns, '\t' )
+                  << n->first << "(" << (int) n->balance() << ")<" << std::endl;
+        XXX_dump( n->right, ns+1 );
+    }
+
+    // XXX
+    void dump_self() const {
+        XXX_dump( _root, 0 );
     }
 private:
     Node * _root;
@@ -279,21 +296,23 @@ AVLTree<KeyT, ValueT, KeyCompareT, NodeHeaderT>::_insert( Node * n, ConstKeyRef 
     }
     if( KeyCompare::less( k, n->first ) ) {
         if( n->left ) {
-            return _insert( n->left, k, v );
+            auto p = _insert( n->left, k, v );
+            return p;
         } else {
-            n->dec_balance();
             n->left = new Node( k, v );  // TODO: alloc
             n->left->parent = n;
+            n->dec_balance();
             _rebalance(n);
             return Pair<bool, ConstIterator>( true, ConstIterator(n->left) );
         }
     } else {
         if( n->right ) {
-            return _insert( n->right, k, v );
+            auto p = _insert( n->right, k, v );
+            return p;
         } else {
-            n->inc_balance();
             n->right = new Node( k, v );  // TODO: alloc
             n->right->parent = n;
+            n->inc_balance();
             _rebalance(n);
             return Pair<bool, ConstIterator>( true, ConstIterator(n->right) );
         }
@@ -303,31 +322,38 @@ AVLTree<KeyT, ValueT, KeyCompareT, NodeHeaderT>::_insert( Node * n, ConstKeyRef 
 template<typename KeyT, typename ValueT, template<class> class KeyCompareT, typename NodeHeaderT> void
 AVLTree<KeyT, ValueT, KeyCompareT, NodeHeaderT>::_rebalance( Node * n ) {
     // Given node has a valid balance --- has to re-trace its ancestors.
+    std::cout << "rebalance():" << std::endl;
     while( n->parent ) {
         n = n->parent;
 
-        NodeHeader bDiff = (n->right ? abs(n->right->balance()) : 0 )
-                         - (n->left  ? abs(n->left->balance())  : 0 )
+        NodeHeader bDiff = (n->right ? 2*abs(n->right->balance()) : 0 )
+                         - (n->left  ? 2*abs(n->left->balance())  : 0 )
                          ;
+        n->balance( bDiff );
 
         if( -2 == bDiff ) {
             // height(n->left->left) < height(n->left->right) => _rotate_right_big(n)
             // else rotate_right(n)
             if( n->left->balance() > 0 ) {
+                std::cout << "\tR" << (int) n->first << std::endl;  // XXX
                 _rotate_right_big( n );
             } else {
+                std::cout << "\tr" << (int) n->first << std::endl;  // XXX
                 _rotate_right( n );
             }
         } else if( 2 == bDiff ) {
             // height(n->right->right) < height(n->right->left) < _rotate_left_big(n)
             // else rotate_left(n)
-            if( n->right->balance() > 0 ) {
+            if( n->right->balance() < 0 ) {
+                std::cout << "\tL" << (int) n->first << std::endl;  // XXX
                 _rotate_left_big( n );
             } else {
+                std::cout << "\tl" << (int) n->first << std::endl;  // XXX
                 _rotate_left( n );
             }
         }
     }
+    XXX_dump( n, 0 );
 }
 
 }  // advanced_containers

@@ -1,9 +1,12 @@
 # include <cstdint>
 # include <cassert>
+# include <cstring>
+
 # include <iostream>
 # include <algorithm>
 # include <fstream>
-# include <cstring>
+# include <vector>
+# include <string>
 
 // Returns code for given letter (ASCII)
 char encode( char c ) {
